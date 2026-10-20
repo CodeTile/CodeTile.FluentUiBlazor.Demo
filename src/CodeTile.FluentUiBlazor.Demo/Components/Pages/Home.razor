@@ -5,3 +5,17 @@
 <h1>Hello, world!</h1>
 
 Welcome to your new Fluent Blazor app.
+
+<div style="overflow-y: auto; border: 1px solid #ccc;">
+    <Virtualize Items="@Lines" ItemSize="40">
+        <div style="height: 40px; box-sizing: border-box; padding: 10px; border-bottom: 1px solid #ddd;">
+            @context
+        </div>
+    </Virtualize>
+</div>
+
+@code {
+    private List<string> Lines = Enumerable.Range(1, 100)
+        .Select(i => $"Line {i}")
+        .ToList();
+}
