@@ -7,31 +7,94 @@
 
 <p>This component demonstrates showing data.</p>
 
-<!-- This page is rendered in SSR mode, so the FluentDataGrid component does not offer any interactivity (like sorting). -->
-<FluentDataGrid Id="weathergrid" Items="@forecasts" GridTemplateColumns="1fr 1fr 1fr 2fr" Loading="@(forecasts == null)" Style="height:204px;" TGridItem="WeatherForecast">
-    <PropertyColumn Title="Date" Property="@(c => c!.Date)" Align="DataGridCellAlignment.Start"/>
-    <PropertyColumn Title="Temp. (C)" Property="@(c => c!.TemperatureC)" Align="DataGridCellAlignment.Center"/>
-    <PropertyColumn Title="Pressure (hPa)" Property="@(c => c!.Pressure)" Align="DataGridCellAlignment.Center"/>
-    <PropertyColumn Title="Summary" Property="@(c => c!.Summary)" Align="DataGridCellAlignment.End"/>
-</FluentDataGrid>
+<!-- This page is rendered in SSR mode, so the grid is not interactive. -->
+<div style="width:100%;">
+    <FluentDataGrid Id="weathergrid"
+                    Items="@forecasts"
+                    GridTemplateColumns="150px 150px 150px 150px"
+                    Style="height:204px; width:100%;"
+                    TGridItem="WeatherForecast"
+                    OnRowClick="HandleRowClick">
 
+        <PropertyColumn Title="Date"
+                        Property="@(c => c!.Date)"
+                        Align="DataGridCellAlignment.Start" />
+
+        <PropertyColumn Title="Temp. (C)"
+                        Property="@(c => c!.TemperatureC)"
+                        Align="DataGridCellAlignment.Center" />
+
+        <PropertyColumn Title="Pressure (hPa)"
+                        Property="@(c => c!.Pressure)"
+                        Align="DataGridCellAlignment.Center" />
+
+        <TemplateColumn Title="Summary"
+                        Align="DataGridCellAlignment.End">
+            <FluentStack Orientation="Orientation.Horizontal"
+                         HorizontalAlignment="HorizontalAlignment.End"
+                         VerticalAlignment="VerticalAlignment.Center"
+                         Spacing="8">
+                @if (GetWeatherIcon(context.Summary) is { } icon)
+                {
+                    <FluentIcon Value="@icon" Color="Color.Default" />
+                }
+
+                <span>@context.Summary</span>
+            </FluentStack>
+        </TemplateColumn>
+
+    </FluentDataGrid>
+</div>
 @code {
+    [Inject]
+    public required INotificationService Notifications { get; set; }
+
     private IQueryable<WeatherForecast>? forecasts;
 
     protected override async Task OnInitializedAsync()
     {
-        // Simulate asynchronous loading to demonstrate streaming rendering
+        // Simulate asynchronous loading to demonstrate streaming rendering.
         await Task.Delay(500);
 
         var startDate = DateOnly.FromDateTime(DateTime.Now);
-        var summaries = new[] { "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching" };
-        forecasts = Enumerable.Range(1,75).Select(index => new WeatherForecast
+
+        var summaries = new[]
         {
-            Date = startDate.AddDays(index),
-            TemperatureC = Random.Shared.Next(-20, 55),
-            Pressure = Random.Shared.Next(950, 1050),
-            Summary = summaries[Random.Shared.Next(summaries.Length)]
-        }).AsQueryable();
+            "Freezing", "Bracing", "Chilly", "Cool", "Mild",
+            "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
+        };
+
+        forecasts = Enumerable.Range(1, 75)
+            .Select(index => new WeatherForecast
+            {
+                Date = startDate.AddDays(index),
+                TemperatureC = Random.Shared.Next(-20, 55),
+                Pressure = Random.Shared.Next(950, 1050),
+                Summary = summaries[Random.Shared.Next(summaries.Length)]
+            })
+            .AsQueryable();
+    }
+
+    private static Icon? GetWeatherIcon(string? summary)
+    {
+        // Use the appropriate Fluent UI icon for the temperature summary.
+        return summary switch
+        {
+            "Freezing" or "Bracing" or "Chilly" => new Icons.Regular.Size20.WeatherSnowflake(),
+            "Cool" or "Mild" => new Icons.Regular.Size20.Cloud(),
+            "Warm" or "Balmy" => new Icons.Regular.Size20.WeatherSunny(),
+            "Hot" or "Sweltering" or "Scorching" => new Icons.Regular.Size20.WeatherSunny(),
+            _ => null
+        };
+    }
+    private async
+    Task HandleRowClick(
+    FluentDataGridRow<WeatherForecast> row)
+    {
+        var forecast = row.Item;
+
+        await Notifications.ShowInfoToastAsync(
+            $"{forecast!.TemperatureC}°C — {forecast.Summary}");
     }
 
     private class WeatherForecast
