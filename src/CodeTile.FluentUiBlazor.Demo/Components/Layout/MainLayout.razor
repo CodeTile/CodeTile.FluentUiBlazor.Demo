@@ -8,6 +8,17 @@
             <FluentSpacer />
             <FluentText Weight="TextWeight.Bold" Size="TextSize.Size600">FluentUI-Blazor Demo</FluentText>
             <FluentSpacer />
+            <FluentButton Appearance="ButtonAppearance.Transparent"
+                          IconOnly="true"
+                          Class="fluent-header-hover"
+                          Title="Switch to Light/Dark theme"
+                          OnClick="@SwitchThemeAsync">
+                <FluentIcon Class="hidden-if-light"
+                            Value="@(new Icons.Filled.Size20.DarkTheme().WithColor(SystemColors.Neutral.ForegroundOnBrand))" />
+                <FluentIcon Class="hidden-if-dark"
+                            Style="transform: rotate(180deg);"
+                            Value="@(new Icons.Filled.Size20.DarkTheme().WithColor(SystemColors.Neutral.ForegroundOnBrand))" />
+            </FluentButton>
         </FluentStack>
     </FluentLayoutItem>
     <FluentLayoutItem Area="LayoutArea.Navigation">

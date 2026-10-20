@@ -1,0 +1,8 @@
+/* CSS for MainLayout component */
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #292929;
+        color: #ffffff;
+    }
+}
