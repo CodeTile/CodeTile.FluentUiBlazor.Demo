@@ -1,0 +1,254 @@
+﻿@page "/company-structure"
+
+@using CodeTile.FluentUiBlazor.Demo.Models
+@inject INotificationService ToastService
+
+<FluentStack Orientation="Orientation.Vertical" VerticalGap="15">
+
+    <FluentStack HorizontalGap="5"
+                 VerticalAlignment="@VerticalAlignment.Center">
+
+        <FluentButton Appearance="ButtonAppearance.Default"
+                      IconStart="@(new Icons.Regular.Size16.Add())"
+                      OnClick="@ExpandAllAsync">
+            Expand all rows
+        </FluentButton>
+
+        <FluentButton Appearance="ButtonAppearance.Default"
+                      IconStart="@(new Icons.Regular.Size16.Subtract())"
+                      OnClick="@CollapseAllAsync">
+            Collapse all rows
+        </FluentButton>
+
+        <FluentBadge Size="BadgeSize.Large"
+                     Content="@($"{items.Count(i => !i.IsHidden)} visible")" />
+
+    </FluentStack>
+
+    <FluentDataGrid @ref="Grid"
+                    Items="@items.Where(i => !i.IsHidden).AsQueryable()"
+                    ResizableColumns="true"
+                    TGridItem="PersonGridItem">
+
+        <TemplateColumn Title="Name"
+                        HeaderTooltip="Expand or collapse employees; click a name for details">
+
+            <div style="@($"display:flex;align-items:center;padding-left:{context.Depth * 20}px;gap:6px")">
+
+                @if (context.HasChildren)
+                {
+                    <FluentButton Appearance="ButtonAppearance.Subtle"
+                                  Size="ButtonSize.Small"
+                                  IconStart="@(context.IsCollapsed
+                                      ? new Icons.Regular.Size16.ChevronRight()
+                                      : new Icons.Regular.Size16.ChevronDown())"
+                                  OnClick="@(() => ToggleNodeAsync(context))">
+                    </FluentButton>
+                }
+                else
+                {
+                    <span style="display:inline-block;width:28px"></span>
+                }
+
+                <FluentButton Appearance="ButtonAppearance.Subtle"
+                              OnClick="@(() => ShowPersonInfoAsync(context))">
+                    @context.Item.Name
+                </FluentButton>
+
+            </div>
+
+        </TemplateColumn>
+
+        <PropertyColumn Title="Job Title"
+                        Property="@(i => i.Item.JobTitle)" />
+
+        <PropertyColumn Title="Department"
+                        Property="@(i => i.Item.Department)" />
+
+        <PropertyColumn Title="Location"
+                        Property="@(i => i.Item.Location)" />
+
+    </FluentDataGrid>
+
+</FluentStack>
+
+@code {
+    private FluentDataGrid<PersonGridItem>? Grid;
+
+    private List<PersonGridItem> items = new();
+
+    protected override void OnInitialized()
+    {
+        var rawPeople = CompanyOrgGenerator.GenerateFlatOrg(30);
+        items = BuildFlatHierarchy(rawPeople);
+    }
+
+    private List<PersonGridItem> BuildFlatHierarchy(List<Person> rawPeople)
+    {
+        var lookup = rawPeople.ToDictionary(
+            p => p.PersonId,
+            p => new PersonGridItem(p));
+
+        // Build parent-child relationships.
+        foreach (var person in rawPeople)
+        {
+            if (person.ManagerId is int managerId &&
+                lookup.TryGetValue(managerId, out var manager))
+            {
+                var employee = lookup[person.PersonId];
+
+                employee.Parent = manager;
+                manager.Children.Add(employee);
+            }
+        }
+
+        foreach (var item in lookup.Values)
+        {
+            item.HasChildren = item.Children.Count > 0;
+        }
+
+        // Show root employees initially; collapse their descendants.
+        void Initialise(PersonGridItem item, int depth, bool hidden)
+        {
+            item.Depth = depth;
+            item.IsHidden = hidden;
+            item.IsCollapsed = item.HasChildren;
+
+            foreach (var child in item.Children)
+            {
+                Initialise(
+                    child,
+                    depth + 1,
+                    hidden || item.IsCollapsed);
+            }
+        }
+
+        var roots = lookup.Values
+            .Where(i => i.Parent is null)
+            .ToList();
+
+        foreach (var root in roots)
+        {
+            Initialise(root, 0, false);
+        }
+
+        return lookup.Values.ToList();
+    }
+
+    private async Task ToggleNodeAsync(PersonGridItem item)
+    {
+        item.IsCollapsed = !item.IsCollapsed;
+
+        SetDescendantVisibility(item, item.IsCollapsed);
+
+        if (Grid is not null)
+        {
+            await Grid.RefreshDataAsync(true);
+        }
+    }
+
+    private void SetDescendantVisibility(
+        PersonGridItem parent,
+        bool hideChildren)
+    {
+        foreach (var child in parent.Children)
+        {
+            child.IsHidden = hideChildren;
+
+            if (hideChildren)
+            {
+                // Hide every descendant when an ancestor collapses.
+                SetDescendantVisibility(child, true);
+            }
+            else
+            {
+                // Respect each child's own collapsed state.
+                SetDescendantVisibility(child, child.IsCollapsed);
+            }
+        }
+    }
+
+    private async Task ExpandAllAsync()
+    {
+        foreach (var item in items)
+        {
+            item.IsCollapsed = false;
+            item.IsHidden = false;
+        }
+
+        if (Grid is not null)
+        {
+            await Grid.RefreshDataAsync(true);
+        }
+    }
+
+    private async Task CollapseAllAsync()
+    {
+        foreach (var item in items)
+        {
+            item.IsCollapsed = item.HasChildren;
+            item.IsHidden = item.Parent is not null;
+        }
+
+        if (Grid is not null)
+        {
+            await Grid.RefreshDataAsync(true);
+        }
+    }
+
+    private async Task ShowPersonInfoAsync(PersonGridItem person)
+    {
+        var managerName = person.Parent is null
+            ? "No manager (root employee)"
+            : person.Parent.Item.Name;
+
+        string? directReports = person.Children.Count == 0
+            ? "No direct reports"
+            : string.Join(
+                ", ",
+                person.Children.Select(c => c.Item.Name));
+
+        if (person.Parent is null)
+        {
+            await ToastService.ShowInfoToastAsync(person.Item.Name,
+                $"Manages:\n {directReports}");
+        }
+        else if (person.Children.Count == 0)
+        {
+            await ToastService.ShowInfoToastAsync(person.Item.Name,
+               $"Managed by: {managerName}" +
+               $"Manages:\n {directReports}");
+        }
+        else
+        {
+            await ToastService.ShowInfoToastAsync(person.Item.Name);
+        }
+    }
+
+    public class PersonGridItem : IHierarchicalGridItem
+    {
+        public Person Item { get; set; }
+
+        public PersonGridItem? Parent { get; set; }
+
+        public List<PersonGridItem> Children { get; set; } = new();
+
+        IEnumerable<IHierarchicalGridItem> IHierarchicalGridItem.Children
+            => Children;
+
+        public int Depth { get; set; }
+
+        public bool HasChildren { get; set; }
+
+        public bool IsHidden { get; set; }
+
+        public bool IsCollapsed { get; set; } = true;
+
+        public bool? IsSelected { get; set; } = false;
+
+        public PersonGridItem(Person item)
+        {
+            Item = item;
+        }
+    }
+}
